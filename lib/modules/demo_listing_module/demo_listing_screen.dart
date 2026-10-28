@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
-import '../../network/errors/network_exception.dart';
 import 'demo_listing_bloc.dart';
 import 'demo_listing_events.dart';
 import 'demo_listing_states.dart';
@@ -31,7 +29,7 @@ class DemoListingScreen extends StatelessWidget {
             child: CircularProgressIndicator(),
           ),
           DemoListingFailure(:final error) => _FailureView(
-            message: _localizedErrorMessage(context, error),
+            message: error.message,
             onRetry: () => context.read<DemoListingBloc>().add(
               const DemoListingRefreshRequested(),
             ),
@@ -74,12 +72,6 @@ class DemoListingScreen extends StatelessWidget {
       },
     ),
   );
-}
-
-String _localizedErrorMessage(BuildContext context, NetworkErrorType error) {
-  // Replace this fallback with the app's localization lookup, for example
-  // AppLocalizations.of(context).networkError(error.localizationKey).
-  return error.message;
 }
 
 class _FailureView extends StatelessWidget {
