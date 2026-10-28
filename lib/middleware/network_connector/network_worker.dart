@@ -41,6 +41,6 @@ final class NetworkWorker implements NetworkConnector {
   late final NetworkExecutor _executor;
 
   @override
-  Future<Result<List<DemoListingItem>, NetworkErrorType>> fetchListing() =>
+  Future<Result<List<DemoListingItem>, NetworkException>> fetchListing() =>
       _executor.get('/posts', parse: demoListingItemsFromJson);
 }

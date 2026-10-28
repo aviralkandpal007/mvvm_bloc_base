@@ -5,5 +5,5 @@ import '../../network/errors/network_exception.dart';
 /// App API contract available to repositories through dependency injection.
 abstract interface class NetworkConnector {
   /// Loads the demo listing.
-  Future<Result<List<DemoListingItem>, NetworkErrorType>> fetchListing();
+  Future<Result<List<DemoListingItem>, NetworkException>> fetchListing();
 }

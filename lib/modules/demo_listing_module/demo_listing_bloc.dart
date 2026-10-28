@@ -23,9 +23,9 @@ class DemoListingBloc extends Bloc<DemoListingEvent, DemoListingState> {
     emit(const DemoListingLoading());
     final result = await _repository.fetchItems();
     switch (result) {
-      case Ok<List<DemoListingItem>, NetworkErrorType>(:final value):
+      case Ok<List<DemoListingItem>, NetworkException>(:final value):
         emit(DemoListingLoaded(value));
-      case Error<List<DemoListingItem>, NetworkErrorType>(:final error):
+      case Error<List<DemoListingItem>, NetworkException>(:final error):
         emit(DemoListingFailure(error));
     }
   }

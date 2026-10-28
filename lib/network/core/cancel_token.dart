@@ -34,7 +34,7 @@ class CancelToken {
   void throwIfCancelled() {
     if (!isCancelled) return;
     throw NetworkCancelledException(
-      reason?.toString() ?? 'The request was cancelled.',
+      message: reason?.toString() ?? 'The request was cancelled.',
       cause: reason,
     );
   }

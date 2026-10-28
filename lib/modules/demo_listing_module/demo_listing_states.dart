@@ -27,5 +27,5 @@ final class DemoListingLoaded extends DemoListingState {
 final class DemoListingFailure extends DemoListingState {
   const DemoListingFailure(this.error);
 
-  final NetworkErrorType error;
+  final NetworkException error;
 }

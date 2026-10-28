@@ -29,7 +29,7 @@ class DemoListingScreen extends StatelessWidget {
             child: CircularProgressIndicator(),
           ),
           DemoListingFailure(:final error) => _FailureView(
-            message: error.message,
+            message: error.type.message,
             onRetry: () => context.read<DemoListingBloc>().add(
               const DemoListingRefreshRequested(),
             ),

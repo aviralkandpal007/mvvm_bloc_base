@@ -10,6 +10,6 @@ class DemoListingRepository {
   final NetworkConnector _connector;
 
   /// Loads the demo listing through the connector API.
-  Future<Result<List<DemoListingItem>, NetworkErrorType>> fetchItems() =>
+  Future<Result<List<DemoListingItem>, NetworkException>> fetchItems() =>
       _connector.fetchListing();
 }

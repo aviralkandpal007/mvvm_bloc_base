@@ -78,7 +78,7 @@ class NetworkClient {
       );
     } on TimeoutException catch (error) {
       throw NetworkTimeoutException(
-        'Request timed out.',
+        message: 'Request timed out.',
         uri: merged.uri,
         cause: error,
       );
@@ -103,7 +103,7 @@ class NetworkClient {
       ).timeout(merged.timeout ?? config.receiveTimeout);
     } on TimeoutException catch (error) {
       throw NetworkTimeoutException(
-        'Request timed out.',
+        message: 'Request timed out.',
         uri: merged.uri,
         cause: error,
       );
@@ -235,15 +235,14 @@ class NetworkClient {
     String path, {
     Map<String, String>? headers,
     CancelToken? cancelToken,
-  }) =>
-      send(
-        NetworkRequest(
-          method: 'DELETE',
-          uri: resolve(path),
-          headers: headers,
-          cancelToken: cancelToken,
-        ),
-      );
+  }) => send(
+    NetworkRequest(
+      method: 'DELETE',
+      uri: resolve(path),
+      headers: headers,
+      cancelToken: cancelToken,
+    ),
+  );
 
   /// Closes the underlying injected client once.
   void close() {

@@ -20,7 +20,7 @@ class NetworkExecutor {
   final NetworkClient _client;
 
   /// Sends GET and parses its response body into the returned Dart value.
-  Future<Result<T, NetworkErrorType>> get<T>(
+  Future<Result<T, NetworkException>> get<T>(
     String path, {
     required ComputeCallback<String, T> parse,
     Map<String, String>? queryParameters,
@@ -41,7 +41,7 @@ class NetworkExecutor {
   }
 
   /// Sends POST with a JSON-encoded [body] and parses the response.
-  Future<Result<T, NetworkErrorType>> post<T>(
+  Future<Result<T, NetworkException>> post<T>(
     String path, {
     required ComputeCallback<String, T> parse,
     Object? body,
@@ -61,7 +61,7 @@ class NetworkExecutor {
   }
 
   /// Sends PUT with a JSON-encoded [body] and parses the response.
-  Future<Result<T, NetworkErrorType>> put<T>(
+  Future<Result<T, NetworkException>> put<T>(
     String path, {
     required ComputeCallback<String, T> parse,
     Object? body,
@@ -81,7 +81,7 @@ class NetworkExecutor {
   }
 
   /// Sends DELETE and parses the response body.
-  Future<Result<T, NetworkErrorType>> delete<T>(
+  Future<Result<T, NetworkException>> delete<T>(
     String path, {
     required ComputeCallback<String, T> parse,
     Map<String, String>? headers,
@@ -90,7 +90,7 @@ class NetworkExecutor {
     return _execute(() => _client.delete(path, headers: headers), uri, parse);
   }
 
-  Future<Result<T, NetworkErrorType>> _execute<T>(
+  Future<Result<T, NetworkException>> _execute<T>(
     Future<NetworkResponse> Function() send,
     Uri uri,
     ComputeCallback<String, T> parse,
@@ -99,18 +99,20 @@ class NetworkExecutor {
       final response = await send();
       final responseBody = response.bodyAsString();
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const Result.error(NetworkErrorType.http);
+        return Result.error(
+          NetworkHttpException(statusCode: response.statusCode),
+        );
       }
       final parsed = await compute(parse, responseBody);
       return Result.ok(parsed);
     } on NetworkException catch (error) {
-      return Result.error(error.type);
+      return Result.error(error);
     } on FormatException {
-      return const Result.error(NetworkErrorType.parse);
+      return const Result.error(NetworkParseException());
     } on TypeError {
-      return const Result.error(NetworkErrorType.parse);
+      return const Result.error(NetworkParseException());
     } on Exception catch (error) {
-      final type = mapNetworkException(error, uri).type;
+      NetworkException type = mapNetworkException(error, uri);
       return Result.error(type);
     }
   }
