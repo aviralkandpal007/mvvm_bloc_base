@@ -34,15 +34,18 @@ lib/network/
 ├── core/
 │   ├── network_config.dart
 │   ├── network_interceptor.dart
-│   └── network_request.dart
+│   ├── network_request.dart
+│   ├── network_response.dart
+│   └── result.dart
 ├── errors/
 │   └── network_exception.dart
 ├── interceptors/
 │   ├── error_interceptor.dart
-│   ├── request_logger_interceptor.dart
+│   ├── logger_interceptor.dart
 │   ├── retry_interceptor.dart
 │   └── sync_interceptor.dart
 ├── network.dart
+├── network_executor.dart
 └── network.md
 ```
 
@@ -65,7 +68,7 @@ final client = NetworkClient(
   ),
   client: http.Client(),
   interceptors: const [
-    RequestLoggerInterceptor(),
+    LoggerInterceptor(),
     RetryInterceptor(),
     ErrorInterceptor(),
   ],
@@ -98,7 +101,67 @@ normal response and returns `NetworkResponse`. Request bodies currently accept
 `String` or `List<int>`; multipart uploads should be implemented as a separate
 streamed upload API before using `http.MultipartRequest`.
 
+### Application API connector
+
+The abstract `NetworkConnector` in `lib/middleware/network_connector/`
+declares app operations such as `fetchListing()`. Its singleton implementation
+`NetworkWorker` owns the configured `NetworkClient`, base URL, headers, and
+interceptors. Worker methods call the client's purpose-built `get`, `post`,
+`put`, and `delete` methods through the small `NetworkExecutor` helper. The
+executor centralizes JSON encoding and typed `Result<T, NetworkErrorType>` error
+handling, so each worker API is a short method such as
+`_executor.get('/posts', parse: DemoListingItem.parseList)`. Feature code
+calls semantic operations like `fetchListing()`; it does not construct HTTP
+requests or pass method strings.
+
+`NetworkExecutor` runs the supplied top-level or static `parse` callback with
+Flutter's `compute`, passing only the response body string and returning the
+typed Dart value from the isolate. The demo passes the top-level
+`demoListingItemsFromJson(String)` parser, matching the common generated-model
+pattern of `<model>FromJson(String)` and `<model>ToJson(Model)` functions. This
+also follows Flutter's documented `parsePhotos(String)` plus
+`compute(parsePhotos, response.body)` pattern.
+
+Register the singleton above `MaterialApp` so descendants can retrieve the
+abstract API with `context.read<NetworkConnector>()`:
+
+```dart
+RepositoryProvider<NetworkConnector>.value(
+  value: NetworkWorker.instance,
+  child: MaterialApp(
+    home: BlocProvider(
+      create: (context) => DemoListingBloc(
+        DemoListingRepository(context.read<NetworkConnector>()),
+      )..add(const DemoListingLoadRequested()),
+      child: const DemoListingScreen(),
+    ),
+  ),
+)
+```
+
+The demo listing flow uses `NetworkConnector.fetchListing()`. Its repository
+delegates to the connector, the Bloc translates load/refresh events into
+loading, loaded, or failure states, and the screen only renders those states.
+`NetworkWorker` is initialized once with `API_BASE_URL` (defaulting to the
+JSONPlaceholder demo host) and reuses its client for every request.
+
+`Result<T, E>` is the sealed utility pattern from Flutter's architecture docs;
+it is not part of the Dart SDK. Network calls return `Ok<T, NetworkErrorType>`
+or `Error<T, NetworkErrorType>`, so the app boundary exposes only a stable
+error enum. Each enum value includes a localization key and English fallback;
+UI code can use the key with its localization object from `BuildContext`, or
+show the fallback message. Typed `NetworkException` subclasses remain inside
+the networking implementation for transport mapping and diagnostic logging.
+`NetworkWorker` lives for the app lifetime and reuses its client across calls.
+
 ## Interceptors and behavior
+
+`LoggerInterceptor` logs request and response headers and bodies through the
+app's shared `Logger` in `lib/utils/logger.dart`. It pretty-prints JSON,
+redacts common credential fields, and truncates long payloads. It forwards
+response chunks unchanged while collecting a copy for logging, so response
+parsing continues normally. `NetworkExecutor` only handles typed parsing and
+error conversion; it does not log payloads.
 
 ### Retry interceptor
 
@@ -109,22 +172,23 @@ sets `isIdempotent: true`, ideally only when the server supports idempotency
 keys. Retry responses are drained so connections can be reused. Configure
 attempts, backoff, and statuses through `RetryPolicy`.
 
-### Request logger
+### Logger interceptor
 
-`RequestLoggerInterceptor` writes method, URL, status, duration and error
-messages in debug mode. It intentionally does not log headers or bodies, which
-might contain credentials, personal data or large payloads. A custom sink can
-be supplied for tests or a redacted logging service.
+`LoggerInterceptor` writes method, URL, request and response bodies, status,
+and duration using the app logger. It forwards response chunks unchanged and
+caps the amount of response data retained for logging. It does not transform
+or handle errors.
 
 ### Error interceptor and exception mapping
 
 `ErrorInterceptor` converts non-success HTTP statuses into
 `NetworkHttpException`, preserving status, URL, headers and text/JSON body when
-available. Transport failures map to `NetworkConnectionException`, timeouts to
-`NetworkTimeoutException`, cancellation to `NetworkCancelledException`, parsing
-failures to `NetworkParseException`, and unknown failures to
-`NetworkUnknownException`. Catch the `NetworkException` base type in data
-repositories, then selectively handle subclasses.
+available. Transport failures map to `NetworkUnreachableException` or
+`NetworkConnectionException`, timeouts to `NetworkTimeoutException`,
+cancellation to `NetworkCancelledException`, parsing failures to
+`NetworkParseException`, and unknown failures to `NetworkUnknownException`.
+Catch the `NetworkException` base type in data repositories, then branch on
+`type` or inspect a subtype for details such as HTTP status.
 
 Install `ErrorInterceptor` before `RetryInterceptor` in the list. Because the
 middleware executes downstream in registration order, the request passes from
@@ -208,6 +272,44 @@ a platform/background-work solution and is not started by this module itself.
 - [Networking overview](https://docs.flutter.dev/data-and-backend/networking)
 - [Fetch data from the internet](https://docs.flutter.dev/cookbook/networking/fetch-data)
 - [Parse JSON in the background](https://docs.flutter.dev/cookbook/networking/background-parsing)
+- [Dart error handling](https://dart.dev/language/error-handling)
+- [Dart class modifiers and sealed classes](https://dart.dev/language/class-modifiers)
+- [Flutter Result pattern](https://docs.flutter.dev/app-architecture/design-patterns/result)
 - [`http` package API](https://pub.dev/packages/http)
+- [`http.Request`](https://pub.dev/documentation/http/latest/http/Request-class.html)
 - [`http.Client`](https://pub.dev/documentation/http/latest/http/Client-class.html)
 - [`http.BaseClient`](https://pub.dev/documentation/http/latest/http/BaseClient-class.html)
+
+## Change log
+
+- Moved the Flutter-documented sealed `Result<T>`, `Ok<T>`, and `Error<T>`
+  types to `network/core/result.dart`.
+- Added the abstract app API in
+  `lib/middleware/network_connector/network_connector.dart` and its singleton
+  implementation in `network_worker.dart`. Registered the abstraction above
+  `MaterialApp` with `RepositoryProvider` for context-based access.
+- Added a demo listing feature using `NetworkConnector` for a GET request and
+  Bloc events/states for loading, success, failure, retry, and refresh.
+- Added `NetworkExecutor` in `network/` to centralize typed GET/POST/PUT/
+  DELETE calls, JSON conversion, and exception-to-`Result` mapping. The worker
+  now delegates API methods to this helper without a separate request adapter.
+- Updated `NetworkExecutor` to run a top-level/static response parser with
+  `compute`, returning typed Dart models directly from the isolate instead of
+  decoding generic JSON there and mapping models on the UI isolate.
+- Exported `NetworkExecutor` and `Result<T>` from `network.dart`.
+- Reduced buffered response copying in `NetworkClient.send` by accumulating
+  streamed chunks in `BytesBuilder` instead of retaining a chunk list and then
+  flattening it into a second list.
+- Tightened `ErrorInterceptor` to treat only 2xx status codes as successful;
+  redirects and other non-2xx statuses now map to `NetworkHttpException`.
+- Added `NetworkErrorType` and a `type` getter to every `NetworkException`,
+  plus `NetworkUnreachableException` for transport failures, so callers can
+  handle offline, timeout, cancellation, HTTP, parse, and unknown cases without
+  parsing message strings.
+- Changed the network result error type to `NetworkErrorType`; enum values now
+  carry localization keys and fallback messages, and the demo Bloc passes the
+  enum through to the UI.
+- Replaced `RequestLoggerInterceptor` with `LoggerInterceptor`; it logs request
+  and response details through the app `Logger` while forwarding response
+  streams intact. JSON is formatted, common credential fields are redacted,
+  and large bodies are truncated.

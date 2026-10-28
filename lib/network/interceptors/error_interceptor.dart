@@ -21,7 +21,7 @@ class ErrorInterceptor implements NetworkInterceptor {
     NetworkNext next,
   ) async {
     final response = await next(request);
-    if (response.statusCode >= 200 && response.statusCode < 400) {
+    if (response.statusCode >= 200 && response.statusCode < 300) {
       return response;
     }
 

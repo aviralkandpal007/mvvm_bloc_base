@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -55,12 +56,12 @@ class NetworkClient {
       ).timeout(merged.timeout ?? config.receiveTimeout);
       final total = streamed.contentLength;
       var received = 0;
-      final chunks = <List<int>>[];
-      // This convenience API retains all chunks so the caller gets one byte
-      // array. It still reports progress as chunks arrive.
+      final bytes = BytesBuilder(copy: false);
+      // Accumulate into one builder to avoid retaining both a chunk list and
+      // a second flattened copy of the full response body.
       await for (final chunk in streamed.stream) {
         received += chunk.length;
-        chunks.add(chunk);
+        bytes.add(chunk);
         merged.progressCallback?.call(
           NetworkProgress(
             sent: 0,
@@ -70,15 +71,10 @@ class NetworkClient {
           ),
         );
       }
-      // Combine after receiving the stream; use sendStreamed for large bodies.
-      final bytes = <int>[];
-      for (final chunk in chunks) {
-        bytes.addAll(chunk);
-      }
       return NetworkResponse(
         request: merged,
         response: streamed,
-        bodyBytes: bytes,
+        bodyBytes: bytes.takeBytes(),
       );
     } on TimeoutException catch (error) {
       throw NetworkTimeoutException(
